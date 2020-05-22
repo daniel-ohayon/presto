@@ -21,6 +21,7 @@ import com.facebook.presto.common.Page;
 import com.facebook.presto.common.block.BlockBuilder;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.event.QueryMonitor;
+import com.facebook.presto.execution.ExecutionFailureInfo;
 import com.facebook.presto.execution.QueryIdGenerator;
 import com.facebook.presto.execution.QueryInfo;
 import com.facebook.presto.execution.QueryPreparer;
@@ -44,6 +45,8 @@ import com.facebook.presto.spark.classloader_interface.PrestoSparkTaskExecutorFa
 import com.facebook.presto.spark.classloader_interface.PrestoSparkTaskInputs;
 import com.facebook.presto.spark.classloader_interface.SerializedPrestoSparkTaskDescriptor;
 import com.facebook.presto.spark.classloader_interface.SerializedTaskStats;
+import com.facebook.presto.spark.execution.PrestoSparkExecutionException;
+import com.facebook.presto.spark.execution.PrestoSparkExecutionExceptionFactory;
 import com.facebook.presto.spark.planner.PrestoSparkPlanFragmenter;
 import com.facebook.presto.spark.planner.PrestoSparkQueryPlanner;
 import com.facebook.presto.spark.planner.PrestoSparkQueryPlanner.PlanAndUpdateType;
@@ -64,10 +67,12 @@ import com.facebook.presto.transaction.TransactionManager;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.airlift.slice.BasicSliceInput;
 import io.airlift.slice.SliceInput;
 import io.airlift.slice.Slices;
 import org.apache.spark.SparkContext;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
@@ -78,10 +83,14 @@ import scala.Tuple2;
 import javax.inject.Inject;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import static com.facebook.airlift.concurrent.MoreFutures.getFutureValue;
 import static com.facebook.presto.execution.scheduler.StreamingPlanSection.extractStreamingSections;
@@ -92,12 +101,15 @@ import static com.facebook.presto.spi.connector.ConnectorCapabilities.SUPPORTS_P
 import static com.facebook.presto.sql.planner.SystemPartitioningHandle.COORDINATOR_DISTRIBUTION;
 import static com.facebook.presto.sql.planner.SystemPartitioningHandle.FIXED_BROADCAST_DISTRIBUTION;
 import static com.facebook.presto.sql.planner.planPrinter.PlanPrinter.textDistributedPlan;
-import static com.google.common.base.Preconditions.checkArgument;
+import static com.facebook.presto.util.Failures.toFailure;
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.base.Throwables.propagateIfPossible;
 import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static com.google.common.collect.Iterables.getOnlyElement;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.Iterators.transform;
+import static com.google.common.util.concurrent.Futures.getUnchecked;
+import static java.util.Collections.unmodifiableList;
 import static java.util.Objects.requireNonNull;
 
 public class PrestoSparkQueryExecutionFactory
@@ -118,6 +130,8 @@ public class PrestoSparkQueryExecutionFactory
     private final AccessControl accessControl;
     private final Metadata metadata;
     private final BlockEncodingManager blockEncodingManager;
+    private final PrestoSparkSettingsRequirements settingsRequirements;
+    private final PrestoSparkExecutionExceptionFactory executionExceptionFactory;
 
     private final Set<PrestoSparkCredentialsProvider> credentialsProviders;
     private final Set<PrestoSparkAuthenticatorProvider> authenticatorProviders;
@@ -137,6 +151,8 @@ public class PrestoSparkQueryExecutionFactory
             AccessControl accessControl,
             Metadata metadata,
             BlockEncodingManager blockEncodingManager,
+            PrestoSparkSettingsRequirements settingsRequirements,
+            PrestoSparkExecutionExceptionFactory executionExceptionFactory,
             Set<PrestoSparkCredentialsProvider> credentialsProviders,
             Set<PrestoSparkAuthenticatorProvider> authenticatorProviders)
     {
@@ -153,6 +169,8 @@ public class PrestoSparkQueryExecutionFactory
         this.accessControl = requireNonNull(accessControl, "accessControl is null");
         this.metadata = requireNonNull(metadata, "metadata is null");
         this.blockEncodingManager = requireNonNull(blockEncodingManager, "blockEncodingManager is null");
+        this.settingsRequirements = requireNonNull(settingsRequirements, "settingsRequirements is null");
+        this.executionExceptionFactory = requireNonNull(executionExceptionFactory, "executionExceptionFactory is null");
         this.credentialsProviders = ImmutableSet.copyOf(requireNonNull(credentialsProviders, "credentialsProviders is null"));
         this.authenticatorProviders = ImmutableSet.copyOf(requireNonNull(authenticatorProviders, "authenticatorProviders is null"));
     }
@@ -176,9 +194,11 @@ public class PrestoSparkQueryExecutionFactory
         // TODO: implement query monitor
         // queryMonitor.queryCreatedEvent();
 
+        Session session = sessionSupplier.createSession(queryId, sessionContext);
+        settingsRequirements.verify(sparkContext, session);
+
         TransactionId transactionId = transactionManager.beginTransaction(true);
-        Session session = sessionSupplier.createSession(queryId, sessionContext)
-                .beginTransactionId(transactionId, transactionManager, accessControl);
+        session = session.beginTransactionId(transactionId, transactionManager, accessControl);
 
         try {
             PreparedQuery preparedQuery = queryPreparer.prepareQuery(session, sql, warningCollector);
@@ -204,25 +224,27 @@ public class PrestoSparkQueryExecutionFactory
                     rddFactory,
                     tableWriteInfo,
                     transactionManager,
-                    new PagesSerde(blockEncodingManager, Optional.empty(), Optional.empty(), Optional.empty()));
+                    new PagesSerde(blockEncodingManager, Optional.empty(), Optional.empty(), Optional.empty()), executionExceptionFactory);
         }
         catch (RuntimeException executionFailure) {
             try {
                 rollback(session, transactionManager);
             }
             catch (RuntimeException rollbackFailure) {
-                if (executionFailure != rollbackFailure) {
-                    executionFailure.addSuppressed(rollbackFailure);
-                }
+                log.error(rollbackFailure, "Encountered error when performing rollback");
             }
             try {
                 // TODO: implement query monitor
                 // queryMonitor.queryImmediateFailureEvent();
             }
             catch (RuntimeException eventFailure) {
-                if (executionFailure != eventFailure) {
-                    executionFailure.addSuppressed(eventFailure);
-                }
+                log.error(eventFailure, "Error publishing query immediate failure event");
+            }
+
+            if (executionFailure instanceof PrestoSparkExecutionException) {
+                Optional<ExecutionFailureInfo> executionFailureInfo = executionExceptionFactory.extractExecutionFailureInfo((PrestoSparkExecutionException) executionFailure);
+                verify(executionFailureInfo.isPresent());
+                throw executionFailureInfo.get().toFailure();
             }
             throw executionFailure;
         }
@@ -296,6 +318,7 @@ public class PrestoSparkQueryExecutionFactory
         private final TableWriteInfo tableWriteInfo;
         private final TransactionManager transactionManager;
         private final PagesSerde pagesSerde;
+        private final PrestoSparkExecutionExceptionFactory executionExceptionFactory;
 
         private PrestoSparkQueryExecution(
                 JavaSparkContext sparkContext,
@@ -310,7 +333,8 @@ public class PrestoSparkQueryExecutionFactory
                 PrestoSparkRddFactory rddFactory,
                 TableWriteInfo tableWriteInfo,
                 TransactionManager transactionManager,
-                PagesSerde pagesSerde)
+                PagesSerde pagesSerde,
+                PrestoSparkExecutionExceptionFactory executionExceptionFactory)
         {
             this.sparkContext = requireNonNull(sparkContext, "sparkContext is null");
             this.session = requireNonNull(session, "session is null");
@@ -325,6 +349,7 @@ public class PrestoSparkQueryExecutionFactory
             this.tableWriteInfo = requireNonNull(tableWriteInfo, "tableWriteInfo is null");
             this.transactionManager = requireNonNull(transactionManager, "transactionManager is null");
             this.pagesSerde = requireNonNull(pagesSerde, "pagesSerde is null");
+            this.executionExceptionFactory = requireNonNull(executionExceptionFactory, "executionExceptionFactory is null");
         }
 
         @Override
@@ -335,24 +360,36 @@ public class PrestoSparkQueryExecutionFactory
                 rddResults = doExecute(plan);
                 commit(session, transactionManager);
             }
-            catch (RuntimeException executionFailure) {
+            catch (Exception executionFailure) {
                 try {
                     rollback(session, transactionManager);
                 }
                 catch (RuntimeException rollbackFailure) {
-                    if (executionFailure != rollbackFailure) {
-                        executionFailure.addSuppressed(rollbackFailure);
-                    }
+                    log.error(rollbackFailure, "Encountered error when performing rollback");
                 }
+
                 try {
                     queryCompletedEvent(Optional.of(executionFailure));
                 }
                 catch (RuntimeException eventFailure) {
-                    if (executionFailure != eventFailure) {
-                        executionFailure.addSuppressed(eventFailure);
-                    }
+                    log.error(eventFailure, "Error publishing query completed event");
                 }
-                throw executionFailure;
+
+                if (executionFailure instanceof SparkException) {
+                    Optional<ExecutionFailureInfo> executionFailureInfo = executionExceptionFactory.extractExecutionFailureInfo((SparkException) executionFailure);
+                    if (executionFailureInfo.isPresent()) {
+                        throw executionFailureInfo.get().toFailure();
+                    }
+                    throw toFailure(executionFailure).toFailure();
+                }
+
+                if (executionFailure instanceof PrestoSparkExecutionException) {
+                    Optional<ExecutionFailureInfo> executionFailureInfo = executionExceptionFactory.extractExecutionFailureInfo((PrestoSparkExecutionException) executionFailure);
+                    verify(executionFailureInfo.isPresent());
+                    throw executionFailureInfo.get().toFailure();
+                }
+
+                throw toFailure(executionFailure).toFailure();
             }
 
             // successfully finished
@@ -364,13 +401,13 @@ public class PrestoSparkQueryExecutionFactory
             for (Tuple2<Integer, PrestoSparkRow> tuple : rddResults) {
                 PrestoSparkRow row = tuple._2;
                 SliceInput sliceInput = new BasicSliceInput(Slices.wrappedBuffer(row.getBytes(), 0, row.getLength()));
-                ImmutableList.Builder<Object> columns = ImmutableList.builder();
+                List<Object> columns = new ArrayList<>();
                 for (Type type : types) {
                     BlockBuilder blockBuilder = type.createBlockBuilder(null, 1);
                     blockBuilder.readPositionFrom(sliceInput);
                     columns.add(type.getObjectValue(connectorSession.getSqlFunctionProperties(), blockBuilder, 0));
                 }
-                result.add(columns.build());
+                result.add(unmodifiableList(columns));
             }
             return result.build();
         }
@@ -386,12 +423,11 @@ public class PrestoSparkQueryExecutionFactory
         }
 
         private List<Tuple2<Integer, PrestoSparkRow>> doExecute(SubPlan root)
+                throws SparkException
         {
             PlanFragment rootFragment = root.getFragment();
 
             if (rootFragment.getPartitioning().equals(COORDINATOR_DISTRIBUTION)) {
-                checkArgument(root.getChildren().size() == 1, "exactly one children fragment is expected");
-
                 PrestoSparkTaskDescriptor taskDescriptor = new PrestoSparkTaskDescriptor(
                         session.toSessionRepresentation(),
                         session.getIdentity().getExtraCredentials(),
@@ -400,14 +436,24 @@ public class PrestoSparkQueryExecutionFactory
                         tableWriteInfo);
                 SerializedPrestoSparkTaskDescriptor serializedTaskDescriptor = new SerializedPrestoSparkTaskDescriptor(sparkTaskDescriptorJsonCodec.toJsonBytes(taskDescriptor));
 
-                SubPlan child = getOnlyElement(root.getChildren());
-                RddAndMore rdd = createRdd(child);
-                List<Tuple2<Integer, PrestoSparkRow>> sparkDriverInput = rdd.collectAndDestroyDependencies();
+                Map<PlanFragmentId, RddAndMore> inputRdds = root.getChildren().stream()
+                        .collect(toImmutableMap(child -> child.getFragment().getId(), this::createRdd));
+
+                Map<String, Future<List<Tuple2<Integer, PrestoSparkRow>>>> inputFutures = inputRdds.entrySet().stream()
+                        .collect(toImmutableMap(
+                                entry -> entry.getKey().toString(),
+                                entry -> entry.getValue().getRdd().collectAsync()));
+
+                waitFor(inputFutures.values());
+
+                Map<String, Iterator<Tuple2<Integer, PrestoSparkRow>>> inputs = inputFutures.entrySet().stream()
+                        .collect(toImmutableMap(Map.Entry::getKey, entry -> getUnchecked(entry.getValue()).iterator()));
+
                 return ImmutableList.copyOf(executorFactoryProvider.get().create(
                         0,
                         0,
                         serializedTaskDescriptor,
-                        new PrestoSparkTaskInputs(ImmutableMap.of(child.getFragment().getId().toString(), sparkDriverInput.iterator()), ImmutableMap.of()),
+                        new PrestoSparkTaskInputs(inputs, ImmutableMap.of()),
                         taskStatsCollector));
             }
 
@@ -470,6 +516,34 @@ public class PrestoSparkQueryExecutionFactory
                     .collect(toImmutableList());
             // TODO: create query info
             return null;
+        }
+
+        private static <T> void waitFor(Collection<Future<T>> futures)
+                throws SparkException
+        {
+            try {
+                for (Future<?> future : futures) {
+                    future.get();
+                }
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
+            catch (ExecutionException e) {
+                propagateIfPossible(e.getCause(), SparkException.class);
+                propagateIfPossible(e.getCause(), RuntimeException.class);
+
+                // this should never happen
+                throw new UncheckedExecutionException(e.getCause());
+            }
+            finally {
+                for (Future<?> future : futures) {
+                    if (!future.isDone()) {
+                        future.cancel(true);
+                    }
+                }
+            }
         }
     }
 

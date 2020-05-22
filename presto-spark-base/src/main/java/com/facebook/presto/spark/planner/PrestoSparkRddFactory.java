@@ -26,6 +26,7 @@ import com.facebook.presto.spark.classloader_interface.IntegerIdentityPartitione
 import com.facebook.presto.spark.classloader_interface.PrestoSparkRow;
 import com.facebook.presto.spark.classloader_interface.PrestoSparkSerializedPage;
 import com.facebook.presto.spark.classloader_interface.PrestoSparkTaskExecutorFactoryProvider;
+import com.facebook.presto.spark.classloader_interface.PrestoSparkZipRdd;
 import com.facebook.presto.spark.classloader_interface.SerializedPrestoSparkTaskDescriptor;
 import com.facebook.presto.spark.classloader_interface.SerializedTaskStats;
 import com.facebook.presto.spi.PrestoException;
@@ -45,11 +46,11 @@ import com.google.common.collect.ImmutableSet;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.FlatMapFunction2;
-import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
+import org.apache.spark.rdd.RDD;
 import org.apache.spark.util.CollectionAccumulator;
 import scala.Tuple2;
+import scala.reflect.ClassTag;
 
 import javax.inject.Inject;
 
@@ -60,6 +61,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -132,6 +134,16 @@ public class PrestoSparkRddFactory
             throw new PrestoException(NOT_SUPPORTED, "Automatic writers scaling is not supported by Presto on Spark");
         }
 
+        // Currently remote round robin exchange is only used in two cases
+        // - Redistribute writes:
+        //   Originally introduced to avoid skewed table writes. Makes sense with streaming exchanges
+        //   as those are very cheap. Since spark has to write the data to disk anyway the optimization
+        //   doesn't make much sense in Presto on Spark context, thus it is always disabled.
+        // - Some corner cases of UNION (e.g.: broadcasted UNION ALL)
+        //   Since round robin exchange is very costly on Spark (and potentially a correctness hazard)
+        //   such unions are always planned with Gather (SINGLE_DISTRIBUTION)
+        checkArgument(!partitioning.equals(FIXED_ARBITRARY_DISTRIBUTION), "FIXED_ARBITRARY_DISTRIBUTION is not supported");
+
         checkArgument(!partitioning.equals(COORDINATOR_DISTRIBUTION), "COORDINATOR_DISTRIBUTION fragment must be run on the driver");
         checkArgument(!partitioning.equals(FIXED_BROADCAST_DISTRIBUTION), "FIXED_BROADCAST_DISTRIBUTION can only be set as an output partitioning scheme, and not as a fragment distribution");
         checkArgument(!partitioning.equals(FIXED_PASSTHROUGH_DISTRIBUTION), "FIXED_PASSTHROUGH_DISTRIBUTION can only be set as local exchange partitioning");
@@ -148,7 +160,7 @@ public class PrestoSparkRddFactory
             fragment = fragment.withBucketToPartition(Optional.of(IntStream.range(0, hashPartitionCount).toArray()));
         }
 
-        if (partitioning.equals(SINGLE_DISTRIBUTION) || partitioning.equals(FIXED_HASH_DISTRIBUTION) || partitioning.equals(FIXED_ARBITRARY_DISTRIBUTION)) {
+        if (partitioning.equals(SINGLE_DISTRIBUTION) || partitioning.equals(FIXED_HASH_DISTRIBUTION)) {
             checkArgument(
                     fragment.getTableScanSchedulingOrder().isEmpty(),
                     "Fragment with is not expected to have table scans. fragmentId: %s, fragment partitioning %s",
@@ -170,6 +182,7 @@ public class PrestoSparkRddFactory
                     .collect(toImmutableMap(Entry::getKey, entry -> entry.getValue().partitionBy(inputPartitioner)));
 
             return createIntermediateRdd(
+                    sparkContext,
                     session,
                     fragment,
                     executorFactoryProvider,
@@ -202,13 +215,11 @@ public class PrestoSparkRddFactory
         if (partitioning.equals(FIXED_HASH_DISTRIBUTION)) {
             return new IntegerIdentityPartitioner(partitionCount);
         }
-        if (partitioning.equals(FIXED_ARBITRARY_DISTRIBUTION)) {
-            throw new PrestoException(NOT_SUPPORTED, "FIXED_ARBITRARY_DISTRIBUTION partitioning is not yet supported");
-        }
         throw new IllegalArgumentException(format("Unexpected fragment partitioning %s", partitioning));
     }
 
     private JavaPairRDD<Integer, PrestoSparkRow> createIntermediateRdd(
+            JavaSparkContext sparkContext,
             Session session,
             PlanFragment fragment,
             PrestoSparkTaskExecutorFactoryProvider executorFactoryProvider,
@@ -225,38 +236,33 @@ public class PrestoSparkRddFactory
         PrestoSparkTaskDescriptor taskDescriptor = createIntermediateTaskDescriptor(session, tableWriteInfo, fragment);
         SerializedPrestoSparkTaskDescriptor serializedTaskDescriptor = new SerializedPrestoSparkTaskDescriptor(taskDescriptorJsonCodec.toJsonBytes(taskDescriptor));
 
-        if (rddInputs.size() == 1) {
-            Entry<PlanFragmentId, JavaPairRDD<Integer, PrestoSparkRow>> input = getOnlyElement(rddInputs.entrySet());
-            PairFlatMapFunction<Iterator<Tuple2<Integer, PrestoSparkRow>>, Integer, PrestoSparkRow> taskProcessor =
-                    createTaskProcessor(
+        if (rddInputs.size() == 0) {
+            checkArgument(fragment.getPartitioning().equals(SINGLE_DISTRIBUTION), "SINGLE_DISTRIBUTION partitioning is expected: %s", fragment.getPartitioning());
+            return sparkContext.parallelize(ImmutableList.of(serializedTaskDescriptor), 1)
+                    .mapPartitionsToPair(createTaskProcessor(
                             executorFactoryProvider,
-                            serializedTaskDescriptor,
-                            input.getKey().toString(),
                             taskStatsCollector,
-                            toTaskProcessorBroadcastInputs(broadcastInputs));
-            return input.getValue()
-                    .mapPartitionsToPair(taskProcessor);
-        }
-        if (rddInputs.size() == 2) {
-            List<PlanFragmentId> fragmentIds = ImmutableList.copyOf(rddInputs.keySet());
-            List<JavaPairRDD<Integer, PrestoSparkRow>> rdds = fragmentIds.stream()
-                    .map(rddInputs::get)
-                    .collect(toImmutableList());
-            FlatMapFunction2<Iterator<Tuple2<Integer, PrestoSparkRow>>, Iterator<Tuple2<Integer, PrestoSparkRow>>, Tuple2<Integer, PrestoSparkRow>> taskProcessor =
-                    createTaskProcessor(
-                            executorFactoryProvider,
-                            serializedTaskDescriptor,
-                            fragmentIds.get(0).toString(),
-                            fragmentIds.get(1).toString(),
-                            taskStatsCollector,
-                            toTaskProcessorBroadcastInputs(broadcastInputs));
-            return JavaPairRDD.fromJavaRDD(
-                    rdds.get(0).zipPartitions(
-                            rdds.get(1),
-                            taskProcessor));
+                            toTaskProcessorBroadcastInputs(broadcastInputs)));
         }
 
-        throw new IllegalArgumentException(format("unsupported number of inputs: %s", rddInputs.size()));
+        ImmutableList.Builder<String> fragmentIds = ImmutableList.builder();
+        ImmutableList.Builder<RDD<Tuple2<Integer, PrestoSparkRow>>> rdds = ImmutableList.builder();
+        for (Map.Entry<PlanFragmentId, JavaPairRDD<Integer, PrestoSparkRow>> input : rddInputs.entrySet()) {
+            fragmentIds.add(input.getKey().toString());
+            rdds.add(input.getValue().rdd());
+        }
+
+        Function<List<Iterator<Tuple2<Integer, PrestoSparkRow>>>, Iterator<Tuple2<Integer, PrestoSparkRow>>> taskProcessor = createTaskProcessor(
+                executorFactoryProvider,
+                serializedTaskDescriptor,
+                fragmentIds.build(),
+                taskStatsCollector,
+                toTaskProcessorBroadcastInputs(broadcastInputs));
+
+        return JavaPairRDD.fromRDD(
+                new PrestoSparkZipRdd(sparkContext.sc(), rdds.build(), taskProcessor),
+                classTag(Integer.class),
+                classTag(PrestoSparkRow.class));
     }
 
     private JavaPairRDD<Integer, PrestoSparkRow> createSourceRdd(
@@ -404,5 +410,10 @@ public class PrestoSparkRddFactory
                 broadcastInputs.keySet(),
                 missingInputs,
                 expectedInputs);
+    }
+
+    private static <T> ClassTag<T> classTag(Class<T> clazz)
+    {
+        return scala.reflect.ClassTag$.MODULE$.apply(clazz);
     }
 }
