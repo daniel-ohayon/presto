@@ -396,13 +396,14 @@ public class FunctionManager
     public FunctionHandle lookupCast(CastType castType, TypeSignature fromType, TypeSignature toType)
     {
         Signature signature = new Signature(castType.getCastName(), SCALAR, emptyList(), emptyList(), toType, singletonList(fromType), false);
-
+        // TODO @dohayon look up cast elsewhere
         try {
             builtInFunctionNamespaceManager.getScalarFunctionImplementation(signature);
         }
         catch (PrestoException e) {
             if (castType.isOperatorType() && e.getErrorCode().getCode() == FUNCTION_IMPLEMENTATION_MISSING.toErrorCode().getCode()) {
-                throw new OperatorNotFoundException(toOperatorType(castType), ImmutableList.of(fromType), toType);
+                return functionNamespaceManagers.get("xdb").getFunctionHandle(Optional.empty(), signature);
+//                throw new OperatorNotFoundException(toOperatorType(castType), ImmutableList.of(fromType), toType);
             }
             throw e;
         }
