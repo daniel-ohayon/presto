@@ -15,6 +15,7 @@ package com.facebook.presto.common.type;
 
 import com.facebook.presto.common.block.Block;
 import com.facebook.presto.common.function.SqlFunctionProperties;
+import com.google.common.collect.ImmutableMap;
 
 import java.util.Map;
 
@@ -24,6 +25,10 @@ public class NumericEnumType
         extends AbstractLongType
 {
     public final Map<String, Long> entries;
+    public static final NumericEnumType MOOD_ENUM = new NumericEnumType(
+            "Mood", ImmutableMap.of(
+        "HAPPY", Long.valueOf(0), "SAD", Long.valueOf(1))
+    );
 
     public NumericEnumType(String name, Map<String, Long> entries)
     {

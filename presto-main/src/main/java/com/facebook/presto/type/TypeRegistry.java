@@ -37,7 +37,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 
@@ -63,6 +62,7 @@ import static com.facebook.presto.common.type.DoubleType.DOUBLE;
 import static com.facebook.presto.common.type.HyperLogLogType.HYPER_LOG_LOG;
 import static com.facebook.presto.common.type.IntegerType.INTEGER;
 import static com.facebook.presto.common.type.JsonType.JSON;
+import static com.facebook.presto.common.type.NumericEnumType.MOOD_ENUM;
 import static com.facebook.presto.common.type.P4HyperLogLogType.P4_HYPER_LOG_LOG;
 import static com.facebook.presto.common.type.QuantileDigestParametricType.QDIGEST;
 import static com.facebook.presto.common.type.RealType.REAL;
@@ -167,8 +167,7 @@ public final class TypeRegistry
         addParametricType(TDIGEST);
 
         // TODO @dohayon remove and fetch from TypeRegistry
-        addType(new NumericEnumType("Mood", ImmutableMap.of(
-                "HAPPY", Long.valueOf(0), "SAD", Long.valueOf(1))));
+        addType(MOOD_ENUM);
 
         for (Type type : types) {
             addType(type);

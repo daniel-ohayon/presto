@@ -402,8 +402,7 @@ public class FunctionManager
         }
         catch (PrestoException e) {
             if (castType.isOperatorType() && e.getErrorCode().getCode() == FUNCTION_IMPLEMENTATION_MISSING.toErrorCode().getCode()) {
-                return functionNamespaceManagers.get("xdb").getFunctionHandle(Optional.empty(), signature);
-//                throw new OperatorNotFoundException(toOperatorType(castType), ImmutableList.of(fromType), toType);
+                throw new OperatorNotFoundException(toOperatorType(castType), ImmutableList.of(fromType), toType);
             }
             throw e;
         }
