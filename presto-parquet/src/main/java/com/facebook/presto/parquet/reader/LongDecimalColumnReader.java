@@ -22,9 +22,9 @@ import org.apache.parquet.io.api.Binary;
 import java.math.BigInteger;
 
 public class LongDecimalColumnReader
-        extends PrimitiveColumnReader
+        extends AbstractColumnReader
 {
-    LongDecimalColumnReader(RichColumnDescriptor descriptor)
+    public LongDecimalColumnReader(RichColumnDescriptor descriptor)
     {
         super(descriptor);
     }

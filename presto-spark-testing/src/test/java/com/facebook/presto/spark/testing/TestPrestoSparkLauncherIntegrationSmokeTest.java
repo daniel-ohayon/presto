@@ -111,7 +111,7 @@ public class TestPrestoSparkLauncherIntegrationSmokeTest
         dockerCompose.pull();
         composeProcess = dockerCompose.up(ImmutableMap.of(
                 "spark-master", 1,
-                "spark-worker", 3,
+                "spark-worker", 2,
                 "hadoop-master", 1));
 
         Session session = testSessionBuilder()
@@ -233,18 +233,20 @@ public class TestPrestoSparkLauncherIntegrationSmokeTest
                 "-v", format("%s:/presto/query.sql", queryFile.getAbsolutePath()),
                 "-v", format("%s:/presto/etc/config.properties", configProperties.getAbsolutePath()),
                 "-v", format("%s:/presto/etc/catalogs", catalogDirectory.getAbsolutePath()),
-                "-e", "SPARK_APPLICATION_JAR_LOCATION=/presto/launcher.jar",
-                "-e", "SPARK_APPLICATION_MAIN_CLASS=com.facebook.presto.spark.launcher.PrestoSparkLauncher",
-                "-e", "SPARK_SUBMIT_ARGS=--deploy-mode client",
-                "-e", "SPARK_APPLICATION_ARGS=" +
-                        "--catalog hive " +
-                        "--schema default " +
-                        "-f /presto/query.sql " +
-                        "--package /presto/package.tar.gz " +
-                        "--config /presto/etc/config.properties " +
-                        "--catalogs /presto/etc/catalogs",
                 "spark-submit",
-                "/bin/bash", "/spark-submit.sh");
+                "/spark/bin/spark-submit",
+                "--executor-memory", "512m",
+                "--executor-cores", "4",
+                "--conf", "spark.task.cpus=4",
+                "--master", "spark://spark-master:7077",
+                "--class", "com.facebook.presto.spark.launcher.PrestoSparkLauncher",
+                "/presto/launcher.jar",
+                "--package", "/presto/package.tar.gz",
+                "--config", "/presto/etc/config.properties",
+                "--catalogs", "/presto/etc/catalogs",
+                "--catalog", "hive",
+                "--schema", "default",
+                "--file", "/presto/query.sql");
         assertEquals(exitCode, 0);
     }
 

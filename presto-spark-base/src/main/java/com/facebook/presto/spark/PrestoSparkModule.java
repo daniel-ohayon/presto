@@ -37,9 +37,11 @@ import com.facebook.presto.cost.StatsCalculatorModule;
 import com.facebook.presto.cost.TaskCountEstimator;
 import com.facebook.presto.event.QueryMonitor;
 import com.facebook.presto.event.QueryMonitorConfig;
+import com.facebook.presto.event.SplitMonitor;
 import com.facebook.presto.execution.DataDefinitionTask;
 import com.facebook.presto.execution.ExecutionFailureInfo;
 import com.facebook.presto.execution.ExplainAnalyzeContext;
+import com.facebook.presto.execution.ForQueryScheduling;
 import com.facebook.presto.execution.QueryIdGenerator;
 import com.facebook.presto.execution.QueryManager;
 import com.facebook.presto.execution.QueryManagerConfig;
@@ -47,6 +49,8 @@ import com.facebook.presto.execution.QueryPreparer;
 import com.facebook.presto.execution.StageInfo;
 import com.facebook.presto.execution.TaskManager;
 import com.facebook.presto.execution.TaskManagerConfig;
+import com.facebook.presto.execution.executor.MultilevelSplitQueue;
+import com.facebook.presto.execution.executor.TaskExecutor;
 import com.facebook.presto.execution.resourceGroups.InternalResourceGroupManager;
 import com.facebook.presto.execution.resourceGroups.LegacyResourceGroupConfigurationManager;
 import com.facebook.presto.execution.resourceGroups.ResourceGroupManager;
@@ -139,6 +143,7 @@ import com.facebook.presto.transaction.TransactionManager;
 import com.facebook.presto.transaction.TransactionManagerConfig;
 import com.facebook.presto.type.TypeDeserializer;
 import com.facebook.presto.type.TypeRegistry;
+import com.facebook.presto.version.EmbedVersion;
 import com.google.inject.Binder;
 import com.google.inject.Provides;
 import com.google.inject.Scopes;
@@ -277,7 +282,13 @@ public class PrestoSparkModule
         ExecutorService executor = newCachedThreadPool(daemonThreadsNamed("presto-spark-executor-%s"));
         binder.bind(Executor.class).toInstance(executor);
         binder.bind(ExecutorService.class).toInstance(executor);
+        binder.bind(ExecutorService.class).annotatedWith(ForQueryScheduling.class).toInstance(executor);
         binder.bind(ScheduledExecutorService.class).toInstance(newScheduledThreadPool(0, daemonThreadsNamed("presto-spark-scheduled-executor-%s")));
+
+        // task executor
+        binder.bind(EmbedVersion.class).in(Scopes.SINGLETON);
+        binder.bind(MultilevelSplitQueue.class).in(Scopes.SINGLETON);
+        binder.bind(TaskExecutor.class).in(Scopes.SINGLETON);
 
         // data stream provider
         binder.bind(PageSourceManager.class).in(Scopes.SINGLETON);
@@ -321,9 +332,10 @@ public class PrestoSparkModule
         binder.bind(PartitioningSpillerFactory.class).to(GenericPartitioningSpillerFactory.class).in(Scopes.SINGLETON);
         binder.bind(SpillerStats.class).in(Scopes.SINGLETON);
 
-        // query monitoring
+        // monitoring
         binder.bind(QueryMonitor.class).in(Scopes.SINGLETON);
         configBinder(binder).bindConfig(QueryMonitorConfig.class);
+        binder.bind(SplitMonitor.class).in(Scopes.SINGLETON);
 
         // Determine the NodeVersion
         ServerConfig serverConfig = buildConfigObject(ServerConfig.class);

@@ -15,11 +15,14 @@ package com.facebook.presto.spark.execution;
 
 import com.facebook.presto.execution.buffer.OutputBufferMemoryManager;
 import com.facebook.presto.spark.classloader_interface.PrestoSparkRow;
+import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
+import org.openjdk.jol.info.ClassLayout;
 
 import javax.annotation.concurrent.GuardedBy;
 
 import java.util.ArrayDeque;
+import java.util.List;
 import java.util.Queue;
 
 import static java.util.Objects.requireNonNull;
@@ -30,7 +33,7 @@ public class PrestoSparkRowBuffer
 
     private final Object monitor = new Object();
     @GuardedBy("monitor")
-    private final Queue<PrestoSparkRow> buffer = new ArrayDeque<>();
+    private final Queue<BufferedRows> buffer = new ArrayDeque<>();
     @GuardedBy("monitor")
     private boolean finished;
 
@@ -44,14 +47,14 @@ public class PrestoSparkRowBuffer
         return memoryManager.getBufferBlockedFuture();
     }
 
-    public void enqueue(PrestoSparkRow row)
+    public void enqueue(BufferedRows rows)
     {
-        requireNonNull(row, "row is null");
+        requireNonNull(rows, "rows is null");
         synchronized (monitor) {
-            buffer.add(row);
+            buffer.add(rows);
+            memoryManager.updateMemoryUsage(rows.getRetainedSizeInBytes());
             monitor.notify();
         }
-        memoryManager.updateMemoryUsage(row.getRetainedSize());
     }
 
     public void setNoMoreRows()
@@ -63,28 +66,48 @@ public class PrestoSparkRowBuffer
         }
     }
 
-    public boolean hasRowsBuffered()
-    {
-        synchronized (monitor) {
-            return !buffer.isEmpty();
-        }
-    }
-
-    public PrestoSparkRow get()
+    public List<PrestoSparkRow> get()
             throws InterruptedException
     {
-        PrestoSparkRow row = null;
+        BufferedRows bufferedRows = null;
         synchronized (monitor) {
             while (buffer.isEmpty() && !finished) {
                 monitor.wait();
             }
             if (!buffer.isEmpty()) {
-                row = buffer.poll();
+                bufferedRows = buffer.poll();
+            }
+            if (bufferedRows != null) {
+                memoryManager.updateMemoryUsage(-bufferedRows.getRetainedSizeInBytes());
             }
         }
-        if (row != null) {
-            memoryManager.updateMemoryUsage(-row.getRetainedSize());
+        if (bufferedRows == null) {
+            return null;
         }
-        return row;
+        return bufferedRows.getRows();
+    }
+
+    public static class BufferedRows
+    {
+        private static final int INSTANCE_SIZE = ClassLayout.parseClass(BufferedRows.class).instanceSize();
+
+        private final List<PrestoSparkRow> rowsList;
+        private final int rowsListRetainedSize;
+
+        public BufferedRows(List<PrestoSparkRow> rowsList, int rowsListRetainedSize)
+        {
+            this.rowsList = ImmutableList.copyOf(requireNonNull(rowsList, "rowsList is null"));
+            this.rowsListRetainedSize = rowsListRetainedSize;
+        }
+
+        public List<PrestoSparkRow> getRows()
+        {
+            return rowsList;
+        }
+
+        public int getRetainedSizeInBytes()
+        {
+            return INSTANCE_SIZE + rowsListRetainedSize;
+        }
     }
 }

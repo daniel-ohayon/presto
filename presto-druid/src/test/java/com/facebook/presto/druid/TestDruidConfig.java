@@ -22,6 +22,8 @@ import java.util.Map;
 
 import static com.facebook.airlift.configuration.testing.ConfigAssertions.assertRecordedDefaults;
 import static com.facebook.airlift.configuration.testing.ConfigAssertions.recordDefaults;
+import static com.facebook.presto.druid.DruidConfig.DruidAuthenticationType.BASIC;
+import static com.facebook.presto.druid.DruidConfig.DruidAuthenticationType.NONE;
 
 public class TestDruidConfig
 {
@@ -33,7 +35,10 @@ public class TestDruidConfig
                 .setDruidCoordinatorUrl(null)
                 .setDruidSchema("druid")
                 .setComputePushdownEnabled(false)
-                .setHadoopConfiguration(""));
+                .setHadoopConfiguration("")
+                .setDruidAuthenticationType(NONE)
+                .setBasicAuthenticationUsername(null)
+                .setBasicAuthenticationPassword(null));
     }
 
     @Test
@@ -45,6 +50,9 @@ public class TestDruidConfig
                 .put("druid.schema-name", "test")
                 .put("druid.compute-pushdown-enabled", "true")
                 .put("druid.hadoop.config.resources", "/etc/core-site.xml,/etc/hdfs-site.xml")
+                .put("druid.authentication.type", "BASIC")
+                .put("druid.basic.authentication.username", "http_basic_username")
+                .put("druid.basic.authentication.password", "http_basic_password")
                 .build();
 
         DruidConfig expected = new DruidConfig()
@@ -52,7 +60,10 @@ public class TestDruidConfig
                 .setDruidCoordinatorUrl("http://druid.coordinator:4321")
                 .setDruidSchema("test")
                 .setComputePushdownEnabled(true)
-                .setHadoopConfiguration(ImmutableList.of("/etc/core-site.xml", "/etc/hdfs-site.xml"));
+                .setHadoopConfiguration(ImmutableList.of("/etc/core-site.xml", "/etc/hdfs-site.xml"))
+                .setDruidAuthenticationType(BASIC)
+                .setBasicAuthenticationUsername("http_basic_username")
+                .setBasicAuthenticationPassword("http_basic_password");
 
         ConfigAssertions.assertFullMapping(properties, expected);
     }

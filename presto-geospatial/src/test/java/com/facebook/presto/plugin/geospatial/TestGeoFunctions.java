@@ -76,17 +76,17 @@ public class TestGeoFunctions
         // geometry within a partition
         assertSpatialPartitions(kdbTreeJson, "MULTIPOINT (5 0.1, 6 2)", ImmutableList.of(3));
         // geometries spanning multiple partitions
-        assertSpatialPartitions(kdbTreeJson, "MULTIPOINT (5 0.1, 5.5 3, 6 2)", ImmutableList.of(3, 4));
-        assertSpatialPartitions(kdbTreeJson, "MULTIPOINT (3 2, 8 3)", ImmutableList.of(2, 3, 4, 5));
+        assertSpatialPartitions(kdbTreeJson, "MULTIPOINT (5 0.1, 5.5 3, 6 2)", ImmutableList.of(4, 3));
+        assertSpatialPartitions(kdbTreeJson, "MULTIPOINT (3 2, 8 3)", ImmutableList.of(5, 4, 3, 2));
         // geometry outside
         assertSpatialPartitions(kdbTreeJson, "MULTIPOINT (2 6, 3 7)", ImmutableList.of());
 
         // with distance
         assertSpatialPartitions(kdbTreeJson, "POINT EMPTY", 1.2, null);
         assertSpatialPartitions(kdbTreeJson, "POINT (1 1)", 1.2, ImmutableList.of(0));
-        assertSpatialPartitions(kdbTreeJson, "POINT (1 1)", 2.3, ImmutableList.of(0, 1, 2));
+        assertSpatialPartitions(kdbTreeJson, "POINT (1 1)", 2.3, ImmutableList.of(2, 1, 0));
         assertSpatialPartitions(kdbTreeJson, "MULTIPOINT (5 0.1, 6 2)", 0.2, ImmutableList.of(3));
-        assertSpatialPartitions(kdbTreeJson, "MULTIPOINT (5 0.1, 6 2)", 1.2, ImmutableList.of(2, 3, 4));
+        assertSpatialPartitions(kdbTreeJson, "MULTIPOINT (5 0.1, 6 2)", 1.2, ImmutableList.of(4, 3, 2));
         assertSpatialPartitions(kdbTreeJson, "MULTIPOINT (2 6, 3 7)", 1.2, ImmutableList.of());
     }
 
@@ -1187,6 +1187,27 @@ public class TestGeoFunctions
         assertFunction("ST_GeometryType(ST_GeometryFromText('MULTIPOLYGON (((1 1, 1 4, 4 4, 4 1, 1 1)), ((1 1, 1 4, 4 4, 4 1, 1 1)))'))", VARCHAR, "ST_MultiPolygon");
         assertFunction("ST_GeometryType(ST_GeometryFromText('GEOMETRYCOLLECTION(POINT(4 6),LINESTRING(4 6, 7 10))'))", VARCHAR, "ST_GeomCollection");
         assertFunction("ST_GeometryType(ST_Envelope(ST_GeometryFromText('LINESTRING (1 1, 2 2)')))", VARCHAR, "ST_Polygon");
+    }
+
+    @Test
+    public void testFlattenGeometryCollections()
+    {
+        assertFlattenGeometryCollections("POINT (0 0)", "POINT (0 0)");
+        assertFlattenGeometryCollections("MULTIPOINT ((0 0), (1 1))", "MULTIPOINT ((0 0), (1 1))");
+        assertFlattenGeometryCollections("GEOMETRYCOLLECTION EMPTY");
+        assertFlattenGeometryCollections("GEOMETRYCOLLECTION (POINT EMPTY)", "POINT EMPTY");
+        assertFlattenGeometryCollections("GEOMETRYCOLLECTION (MULTIPOLYGON EMPTY)", "MULTIPOLYGON EMPTY");
+        assertFlattenGeometryCollections("GEOMETRYCOLLECTION (POINT (0 0))", "POINT (0 0)");
+        assertFlattenGeometryCollections(
+                "GEOMETRYCOLLECTION (POINT (0 0), GEOMETRYCOLLECTION (POINT (1 1)))",
+                "POINT (1 1)", "POINT (0 0)");
+    }
+
+    private void assertFlattenGeometryCollections(String wkt, String... expected)
+    {
+        assertFunction(
+                String.format("transform(flatten_geometry_collections(ST_GeometryFromText('%s')), x -> ST_ASText(x))", wkt),
+                new ArrayType(VARCHAR), ImmutableList.copyOf(expected));
     }
 
     @Test
