@@ -19,7 +19,7 @@ import com.facebook.presto.common.type.DecimalParseResult;
 import com.facebook.presto.common.type.Decimals;
 import com.facebook.presto.common.type.SqlDecimal;
 import com.facebook.presto.common.type.Type;
-import com.facebook.presto.spi.function.BuiltInFunction;
+import com.facebook.presto.metadata.BuiltInFunction;
 import com.facebook.presto.metadata.FunctionListBuilder;
 import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.metadata.SqlScalarFunction;

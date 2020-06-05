@@ -13,8 +13,6 @@
  */
 package com.facebook.presto.metadata;
 
-import com.facebook.presto.spi.function.BuiltInFunction;
-
 import java.util.Objects;
 
 import static java.util.Objects.requireNonNull;

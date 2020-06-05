@@ -212,9 +212,6 @@ public class PluginManager
             metadata.registerBuiltInFunctions(extractFunctions(functionClass));
         }
 
-        log.info("Registering dynamic functions");
-        metadata.registerBuiltInFunctions(ImmutableList.copyOf(plugin.getDynamicFunctions()));
-
         for (FunctionNamespaceManagerFactory functionNamespaceManagerFactory : plugin.getFunctionNamespaceManagerFactories()) {
             log.info("Registering function namespace manager %s", functionNamespaceManagerFactory.getName());
             metadata.getFunctionManager().addFunctionNamespaceFactory(functionNamespaceManagerFactory);

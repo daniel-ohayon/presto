@@ -16,7 +16,6 @@ package com.facebook.presto.metadata;
 import com.facebook.presto.common.function.OperatorType;
 import com.facebook.presto.common.type.TypeManager;
 import com.facebook.presto.operator.scalar.BuiltInScalarFunctionImplementation;
-import com.facebook.presto.spi.function.BuiltInFunction;
 import com.facebook.presto.spi.function.Signature;
 
 import static com.facebook.presto.spi.function.FunctionKind.SCALAR;

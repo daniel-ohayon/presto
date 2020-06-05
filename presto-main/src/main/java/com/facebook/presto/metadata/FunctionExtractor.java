@@ -16,7 +16,6 @@ package com.facebook.presto.metadata;
 import com.facebook.presto.operator.scalar.annotations.ScalarFromAnnotationsParser;
 import com.facebook.presto.operator.window.WindowAnnotationsParser;
 import com.facebook.presto.spi.function.AggregationFunction;
-import com.facebook.presto.spi.function.BuiltInFunction;
 import com.facebook.presto.spi.function.ScalarFunction;
 import com.facebook.presto.spi.function.ScalarOperator;
 import com.facebook.presto.spi.function.WindowFunction;
