@@ -23,7 +23,7 @@ import com.facebook.presto.common.type.RowType;
 import com.facebook.presto.common.type.TimeZoneKey;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.execution.warnings.WarningCollector;
-import com.facebook.presto.metadata.BuiltInFunction;
+import com.facebook.presto.spi.function.BuiltInFunction;
 import com.facebook.presto.metadata.FunctionListBuilder;
 import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.metadata.Split;

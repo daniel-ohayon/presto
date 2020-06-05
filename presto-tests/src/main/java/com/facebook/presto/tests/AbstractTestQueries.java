@@ -18,7 +18,7 @@ import com.facebook.presto.SystemSessionProperties;
 import com.facebook.presto.common.type.Decimals;
 import com.facebook.presto.common.type.SqlTimestampWithTimeZone;
 import com.facebook.presto.common.type.VarcharType;
-import com.facebook.presto.metadata.BuiltInFunction;
+import com.facebook.presto.spi.function.BuiltInFunction;
 import com.facebook.presto.metadata.FunctionListBuilder;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.session.PropertyMetadata;
