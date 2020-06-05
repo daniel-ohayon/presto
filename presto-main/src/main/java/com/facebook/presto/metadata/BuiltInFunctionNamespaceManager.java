@@ -19,6 +19,7 @@ import com.facebook.presto.common.block.BlockEncodingSerde;
 import com.facebook.presto.common.block.BlockSerdeUtil;
 import com.facebook.presto.common.function.OperatorType;
 import com.facebook.presto.common.function.QualifiedFunctionName;
+import com.facebook.presto.common.type.NumericEnumType;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
 import com.facebook.presto.common.type.TypeSignature;
@@ -622,7 +623,9 @@ public class BuiltInFunctionNamespaceManager
                 .scalar(MapIndeterminateOperator.class)
                 .scalar(TypeOfFunction.class)
                 .scalar(TryFunction.class)
-                .scalars(EnumCast.class)
+                //.scalars(EnumCast.class)
+                .functions(EnumCast.varcharToEnumCastFunction(NumericEnumType.MOOD_ENUM))
+                .functions(EnumCast.integerToEnumCastFunction(NumericEnumType.MOOD_ENUM))
                 .functions(ZIP_WITH_FUNCTION, MAP_ZIP_WITH_FUNCTION)
                 .functions(ZIP_FUNCTIONS)
                 .functions(ARRAY_JOIN, ARRAY_JOIN_WITH_NULL_REPLACEMENT)
