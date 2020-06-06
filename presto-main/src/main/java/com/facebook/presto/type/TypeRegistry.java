@@ -62,7 +62,6 @@ import static com.facebook.presto.common.type.DoubleType.DOUBLE;
 import static com.facebook.presto.common.type.HyperLogLogType.HYPER_LOG_LOG;
 import static com.facebook.presto.common.type.IntegerType.INTEGER;
 import static com.facebook.presto.common.type.JsonType.JSON;
-import static com.facebook.presto.common.type.NumericEnumType.MOOD_ENUM;
 import static com.facebook.presto.common.type.P4HyperLogLogType.P4_HYPER_LOG_LOG;
 import static com.facebook.presto.common.type.QuantileDigestParametricType.QDIGEST;
 import static com.facebook.presto.common.type.RealType.REAL;
@@ -166,8 +165,10 @@ public final class TypeRegistry
         addParametricType(QDIGEST);
         addParametricType(TDIGEST);
 
-        // TODO @dohayon remove and fetch from TypeRegistry
-        addType(MOOD_ENUM);
+        // TODO @dohayon move to a plugin
+        for (Type type : NumericEnumType.getEnums()) {
+            addType(type);
+        }
 
         for (Type type : types) {
             addType(type);

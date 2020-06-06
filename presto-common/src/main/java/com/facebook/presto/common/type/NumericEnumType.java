@@ -15,8 +15,13 @@ package com.facebook.presto.common.type;
 
 import com.facebook.presto.common.block.Block;
 import com.facebook.presto.common.function.SqlFunctionProperties;
-import com.google.common.collect.ImmutableMap;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableList;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 import static com.facebook.presto.common.type.TypeSignature.parseTypeSignature;
@@ -25,15 +30,30 @@ public class NumericEnumType
         extends AbstractLongType
 {
     public final Map<String, Long> entries;
-    public static final NumericEnumType MOOD_ENUM = new NumericEnumType(
-            "Mood", ImmutableMap.of(
-        "HAPPY", Long.valueOf(0), "SAD", Long.valueOf(1))
-    );
 
     public NumericEnumType(String name, Map<String, Long> entries)
     {
         super(parseTypeSignature(name));
         this.entries = entries;
+    }
+
+    public static List<NumericEnumType> getEnums()
+    {
+        ObjectMapper mapper = new ObjectMapper();
+        TypeReference<Map<String, Map<String, Long>>> typeRef = new TypeReference<Map<String, Map<String, Long>>>() {};
+        try {
+            Map<String, Map<String, Long>> enumData = mapper.readValue(
+                    new File("/Users/dohayon/typedb_enums.json"), typeRef);
+            ImmutableList.Builder builder = ImmutableList.builder();
+            for (String enumName : enumData.keySet()) {
+                Map<String, Long> entries = enumData.get(enumName);
+                builder.add(new NumericEnumType(enumName, entries));
+            }
+            return builder.build();
+        }
+        catch (IOException e) {
+            throw new Error(e);
+        }
     }
 
     @Override

@@ -623,9 +623,6 @@ public class BuiltInFunctionNamespaceManager
                 .scalar(MapIndeterminateOperator.class)
                 .scalar(TypeOfFunction.class)
                 .scalar(TryFunction.class)
-                //.scalars(EnumCast.class)
-                .functions(EnumCast.varcharToEnumCastFunction(NumericEnumType.MOOD_ENUM))
-                .functions(EnumCast.integerToEnumCastFunction(NumericEnumType.MOOD_ENUM))
                 .functions(ZIP_WITH_FUNCTION, MAP_ZIP_WITH_FUNCTION)
                 .functions(ZIP_FUNCTIONS)
                 .functions(ARRAY_JOIN, ARRAY_JOIN_WITH_NULL_REPLACEMENT)
@@ -690,6 +687,13 @@ public class BuiltInFunctionNamespaceManager
                 .scalars(TDigestFunctions.class)
                 .functions(TDIGEST_AGG, TDIGEST_AGG_WITH_WEIGHT, TDIGEST_AGG_WITH_WEIGHT_AND_COMPRESSION)
                 .function(MergeTDigestFunction.MERGE);
+
+        // TODO @dohayon move to a plugin
+        for (NumericEnumType enumType : NumericEnumType.getEnums()) {
+            builder.functions(
+                    EnumCast.integerToEnumCastFunction(enumType),
+                    EnumCast.varcharToEnumCastFunction(enumType));
+        }
 
         switch (featuresConfig.getRegexLibrary()) {
             case JONI:
