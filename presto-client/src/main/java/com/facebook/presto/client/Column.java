@@ -13,12 +13,16 @@
  */
 package com.facebook.presto.client;
 
+import com.facebook.presto.common.type.NumericEnumType;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeSignature;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableMap;
 
 import javax.annotation.concurrent.Immutable;
+
+import java.util.Map;
 
 import static java.util.Objects.requireNonNull;
 
@@ -28,26 +32,37 @@ public class Column
     private final String name;
     private final String type;
     private final ClientTypeSignature typeSignature;
+    private final Map<String, Object> typeMetadata;  // TODO @dohayon make this a strongly typed object
 
     public Column(String name, Type type)
     {
-        this(name, type.getTypeSignature());
+        this(
+                name,
+                type.getTypeSignature().toString(),
+                new ClientTypeSignature(type.getTypeSignature()),
+                type instanceof NumericEnumType ?
+                        ImmutableMap.of("enumEntries", ((NumericEnumType) type).entries)
+                        : null
+        );
     }
 
     public Column(String name, TypeSignature signature)
     {
-        this(name, signature.toString(), new ClientTypeSignature(signature));
+        this(name, signature.toString(), new ClientTypeSignature(signature), null);
     }
 
     @JsonCreator
     public Column(
             @JsonProperty("name") String name,
             @JsonProperty("type") String type,
-            @JsonProperty("typeSignature") ClientTypeSignature typeSignature)
+            @JsonProperty("typeSignature") ClientTypeSignature typeSignature,
+            @JsonProperty("typeMetadata") Map<String, Object> typeMetadata
+    )
     {
         this.name = requireNonNull(name, "name is null");
         this.type = requireNonNull(type, "type is null");
         this.typeSignature = typeSignature;
+        this.typeMetadata = typeMetadata;
     }
 
     @JsonProperty
@@ -67,4 +82,7 @@ public class Column
     {
         return typeSignature;
     }
+
+    @JsonProperty
+    public Map<String, Object> getTypeMetadata() { return typeMetadata; }
 }
