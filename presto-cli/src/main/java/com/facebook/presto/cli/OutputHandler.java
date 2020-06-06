@@ -13,14 +13,20 @@
  */
 package com.facebook.presto.cli;
 
+import com.facebook.presto.client.Column;
 import com.facebook.presto.client.StatementClient;
+import com.google.common.collect.Streams;
 import io.airlift.units.Duration;
+import javafx.util.Pair;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static io.airlift.units.Duration.nanosSince;
 import static java.util.Collections.unmodifiableList;
@@ -44,14 +50,30 @@ public final class OutputHandler
         this.printer = requireNonNull(printer, "printer is null");
     }
 
-    public void processRow(List<?> row)
+    public void processRow(List<?> row, List<Column> columns)
             throws IOException
     {
         if (rowBuffer.isEmpty()) {
             bufferStart = System.nanoTime();
         }
 
-        rowBuffer.add(row);
+        List<?> processedRow = Streams.zip(row.stream(), columns.stream(), Pair::new).map(pair -> {
+            Object value = pair.getKey();
+            Column col = pair.getValue();
+            Map<String, Object> colInfo = col.getTypeMetadata();
+            if (colInfo != null && colInfo.get("enumEntries") != null) {
+                Map<String, Long> entries = (Map<String, Long>) colInfo.get("enumEntries");
+                Optional<String> key = entries.entrySet().stream()
+                        .filter(e -> e.getValue() == value)
+                        .map(Map.Entry::getKey).findFirst();
+                return String.format("%s.%s", col.getType(), key.get());
+            }
+            else {
+                return value;
+            }
+        }).collect(Collectors.toList());
+
+        rowBuffer.add(processedRow);
         if (rowBuffer.size() >= MAX_BUFFERED_ROWS) {
             flush(false);
         }
@@ -74,7 +96,7 @@ public final class OutputHandler
             Iterable<List<Object>> data = client.currentData().getData();
             if (data != null) {
                 for (List<Object> row : data) {
-                    processRow(unmodifiableList(row));
+                    processRow(unmodifiableList(row), client.currentData().getColumns());
                 }
             }
 
