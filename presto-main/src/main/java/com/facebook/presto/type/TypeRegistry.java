@@ -182,6 +182,8 @@ public final class TypeRegistry
     public Type getType(TypeSignature signature)
     {
         Type type = types.get(signature);
+        // TODO @dohayon look up type definition from FunctionAndTypeNamespaceMgr
+        // eg extend TypeManager to be able to accept plugins managing types and resolve type against those.
         if (type == null) {
             try {
                 return parametricTypeCache.getUnchecked(signature);
