@@ -74,11 +74,7 @@ public interface FunctionNamespaceManager<F extends SqlFunction>
 
     ScalarFunctionImplementation getScalarFunctionImplementation(FunctionHandle functionHandle);
 
-    void createType();
-
-    void alterType();
-
-    void dropType();
-
-    Type getType(TypeSignature typeSignature);
+    default Type getType(TypeSignature typeSignature) {
+        return null;
+    }
 }
