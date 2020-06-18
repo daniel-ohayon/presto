@@ -23,7 +23,6 @@ import com.facebook.presto.common.type.NumericEnumType;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
 import com.facebook.presto.common.type.TypeSignature;
-import com.facebook.presto.common.type.VarcharType;
 import com.facebook.presto.operator.aggregation.ApproximateCountDistinctAggregation;
 import com.facebook.presto.operator.aggregation.ApproximateDoublePercentileAggregations;
 import com.facebook.presto.operator.aggregation.ApproximateDoublePercentileArrayAggregations;
@@ -224,15 +223,12 @@ import com.facebook.presto.type.setdigest.SetDigestOperators;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
 import com.google.common.util.concurrent.UncheckedExecutionException;
-import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils;
 import io.airlift.slice.Slice;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -910,6 +906,9 @@ public class BuiltInFunctionNamespaceManager
         Type returnType = typeManager.getType(signature.getReturnType());
 
         if (returnType instanceof NumericEnumType && signature.getName() == CastType.CAST.getCastName()) {
+            // Specific enum types are not known in advance at server startup time, but all enum types
+            // support the same CAST functions. So here, we build these cast functions on-the-fly
+            // for the particular enum type encountered in the signature.
             candidates = Iterables.concat(candidates, EnumCast.makeEnumCastFunctions((NumericEnumType) returnType));
         }
 
@@ -976,8 +975,6 @@ public class BuiltInFunctionNamespaceManager
 
         throw new PrestoException(FUNCTION_IMPLEMENTATION_MISSING, format("%s not found", signature));
     }
-
-
 
     private static class EmptyTransactionHandle
             implements FunctionNamespaceTransactionHandle
