@@ -32,7 +32,6 @@ import com.facebook.presto.sql.analyzer.FeaturesConfig;
 import com.facebook.presto.type.khyperloglog.KHyperLogLogType;
 import com.facebook.presto.type.setdigest.SetDigestType;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.MoreObjects;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -182,7 +181,8 @@ public final class TypeRegistry
     @Override
     public Type getType(TypeSignature signature)
     {
-        Type type = MoreObjects.firstNonNull(types.get(signature), functionManager.resolveTypeDynamically(signature));
+        Type type = types.get(signature);
+        type = type == null ? functionManager.resolveTypeDynamically(signature) : type;
         if (type == null) {
             try {
                 return parametricTypeCache.getUnchecked(signature);
