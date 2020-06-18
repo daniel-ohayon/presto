@@ -32,6 +32,7 @@ import com.facebook.presto.sql.analyzer.FeaturesConfig;
 import com.facebook.presto.type.khyperloglog.KHyperLogLogType;
 import com.facebook.presto.type.setdigest.SetDigestType;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -181,9 +182,7 @@ public final class TypeRegistry
     @Override
     public Type getType(TypeSignature signature)
     {
-        Type type = types.get(signature);
-        // TODO @dohayon look up type definition from FunctionAndTypeNamespaceMgr
-        // eg extend TypeManager to be able to accept plugins managing types and resolve type against those.
+        Type type = MoreObjects.firstNonNull(types.get(signature), functionManager.resolveTypeDynamically(signature));
         if (type == null) {
             try {
                 return parametricTypeCache.getUnchecked(signature);

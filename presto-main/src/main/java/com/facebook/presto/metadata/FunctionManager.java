@@ -397,16 +397,20 @@ public class FunctionManager
     {
         Signature signature = new Signature(castType.getCastName(), SCALAR, emptyList(), emptyList(), toType, singletonList(fromType), false);
 
-        try {
-            builtInFunctionNamespaceManager.getScalarFunctionImplementation(signature);
-        }
-        catch (PrestoException e) {
-            if (castType.isOperatorType() && e.getErrorCode().getCode() == FUNCTION_IMPLEMENTATION_MISSING.toErrorCode().getCode()) {
-                throw new OperatorNotFoundException(toOperatorType(castType), ImmutableList.of(fromType), toType);
-            }
-            throw e;
-        }
-        return builtInFunctionNamespaceManager.getFunctionHandle(Optional.empty(), signature);
+        // TODO @dohayon clean up?
+        // TODO is this enough or do we need to wire the nsmgr in other functions here?
+        return functionNamespaceManagers.values().stream().map(manager -> manager.getFunctionHandle(Optional.empty(), signature)).filter(Objects::nonNull).findFirst().get();
+
+//        try {
+//            builtInFunctionNamespaceManager.getScalarFunctionImplementation(signature);
+//        }
+//        catch (PrestoException e) {
+//            if (castType.isOperatorType() && e.getErrorCode().getCode() == FUNCTION_IMPLEMENTATION_MISSING.toErrorCode().getCode()) {
+//                throw new OperatorNotFoundException(toOperatorType(castType), ImmutableList.of(fromType), toType);
+//            }
+//            throw e;
+//        }
+//        return builtInFunctionNamespaceManager.getFunctionHandle(Optional.empty(), signature);
     }
 
     private FunctionHandle lookupCachedFunction(QualifiedFunctionName functionName, List<TypeSignatureProvider> parameterTypes)
@@ -683,6 +687,16 @@ public class FunctionManager
         Optional<BoundVariables> boundVariables = new SignatureBinder(typeManager, right.getDeclaredSignature(), true)
                 .bindVariables(resolvedTypes);
         return boundVariables.isPresent();
+    }
+
+    // Called by TypeRegistry to look up types from FunctionNamespaceManagers
+    // TODO should this be moved to TypeRegistry instead? figure out coupling
+    public Type resolveTypeDynamically(TypeSignature signature) {
+        return functionNamespaceManagers.values().stream()
+                .map(manager -> manager.getType(signature))
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     private static class ApplicableFunction
