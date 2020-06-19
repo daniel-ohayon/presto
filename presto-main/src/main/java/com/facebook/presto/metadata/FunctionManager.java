@@ -278,6 +278,15 @@ public class FunctionManager
         Optional<FunctionNamespaceTransactionHandle> transactionHandle = transactionId
                 .map(id -> transactionManager.getFunctionNamespaceTransaction(id, functionName.getFunctionNamespace().getCatalogName()));
         Collection<? extends SqlFunction> candidates = functionNamespaceManager.getFunctions(transactionHandle, functionName);
+//
+//        if (OperatorType.EQUAL.getFunctionName().equals(functionName) && parameterTypes.size() == 2) {
+//                Type type1 = functionNamespaceManager.getType(parameterTypes.get(0).getTypeSignature());
+//                Type type2 = functionNamespaceManager.getType(parameterTypes.get(1).getTypeSignature());
+//                if (type1 != null && type2 != null && type1.getClass().equals(type2.getClass()) && type1 instanceof IntegerEnumType) {
+//                    candidates = new ArrayList<>(candidates);
+//                    candidates.add((EnumOperators.enumToEnumEqualsFunction((IntegerEnumType)type1));
+//                }
+//        }
 
         try {
             return lookupFunction(functionNamespaceManager, transactionHandle, functionName, parameterTypes, candidates);

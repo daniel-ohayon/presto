@@ -18,17 +18,22 @@ import com.facebook.presto.common.function.SqlFunctionProperties;
 
 import java.util.Map;
 
-import static com.facebook.presto.common.type.TypeSignature.parseTypeSignature;
-
-public class NumericEnumType
+public class IntegerEnumType
         extends AbstractLongType
+        implements EnumType<Long>
 {
-    public final Map<String, Long> entries;
+    private final Map<String, Long> entries;
 
-    public NumericEnumType(String name, Map<String, Long> entries)
+    public IntegerEnumType(String name, Map<String, Long> entries)
     {
-        super(parseTypeSignature(name));
+        super(TypeSignature.parseTypeSignature(name));
         this.entries = entries;
+    }
+
+    @Override
+    public Map<String, Long> getEntries()
+    {
+        return entries;
     }
 
     @Override
@@ -39,17 +44,5 @@ public class NumericEnumType
         }
 
         return block.getLong(position);
-    }
-
-    @Override
-    public boolean isComparable()
-    {
-        return false;
-    }
-
-    @Override
-    public boolean isOrderable()
-    {
-        return false;
     }
 }

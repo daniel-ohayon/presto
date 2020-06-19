@@ -19,7 +19,7 @@ import com.facebook.presto.common.block.BlockEncodingSerde;
 import com.facebook.presto.common.block.BlockSerdeUtil;
 import com.facebook.presto.common.function.OperatorType;
 import com.facebook.presto.common.function.QualifiedFunctionName;
-import com.facebook.presto.common.type.NumericEnumType;
+import com.facebook.presto.common.type.EnumType;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
 import com.facebook.presto.common.type.TypeSignature;
@@ -192,7 +192,7 @@ import com.facebook.presto.type.DateOperators;
 import com.facebook.presto.type.DateTimeOperators;
 import com.facebook.presto.type.DecimalOperators;
 import com.facebook.presto.type.DoubleOperators;
-import com.facebook.presto.type.EnumCast;
+import com.facebook.presto.type.EnumOperators;
 import com.facebook.presto.type.HyperLogLogOperators;
 import com.facebook.presto.type.IntegerOperators;
 import com.facebook.presto.type.IntervalDayTimeOperators;
@@ -905,11 +905,11 @@ public class BuiltInFunctionNamespaceManager
         // search for exact match
         Type returnType = typeManager.getType(signature.getReturnType());
 
-        if (returnType instanceof NumericEnumType && signature.getName() == CastType.CAST.getCastName()) {
+        if (returnType instanceof EnumType && CastType.CAST.getCastName().equals(signature.getName())) {
             // Specific enum types are not known in advance at server startup time, but all enum types
             // support the same CAST functions. So here, we build these cast functions on-the-fly
             // for the particular enum type encountered in the signature.
-            candidates = Iterables.concat(candidates, EnumCast.makeEnumCastFunctions((NumericEnumType) returnType));
+            candidates = Iterables.concat(candidates, EnumOperators.makeEnumCastFunctions((EnumType) returnType));
         }
 
         List<TypeSignatureProvider> argumentTypeSignatureProviders = fromTypeSignatures(signature.getArgumentTypes());
