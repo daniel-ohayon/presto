@@ -45,4 +45,16 @@ public class IntegerEnumType
 
         return block.getLong(position);
     }
+
+    @Override
+    public boolean isComparable()
+    {
+        return false;
+    }
+
+    @Override
+    public boolean isOrderable()
+    {
+        return false;
+    }
 }

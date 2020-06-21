@@ -905,6 +905,10 @@ public class BuiltInFunctionNamespaceManager
         // search for exact match
         Type returnType = typeManager.getType(signature.getReturnType());
 
+        if (returnType instanceof EnumType && signature.getNameSuffix().equals("get_enum_value")) {
+            candidates = ImmutableList.of(EnumOperators.makeEnumKeyLookupFunction((EnumType) returnType));
+        }
+
         if (returnType instanceof EnumType && CastType.CAST.getCastName().equals(signature.getName())) {
             // Specific enum types are not known in advance at server startup time, but all enum types
             // support the same CAST functions. So here, we build these cast functions on-the-fly

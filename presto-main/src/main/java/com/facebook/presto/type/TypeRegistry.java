@@ -17,10 +17,12 @@ import com.facebook.presto.common.function.OperatorType;
 import com.facebook.presto.common.type.ArrayType;
 import com.facebook.presto.common.type.CharType;
 import com.facebook.presto.common.type.DecimalType;
+import com.facebook.presto.common.type.IntegerEnumType;
 import com.facebook.presto.common.type.MapType;
 import com.facebook.presto.common.type.ParametricType;
 import com.facebook.presto.common.type.RowType;
 import com.facebook.presto.common.type.StandardTypes;
+import com.facebook.presto.common.type.StringEnumType;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
 import com.facebook.presto.common.type.TypeParameter;
@@ -36,6 +38,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 
@@ -163,6 +166,16 @@ public final class TypeRegistry
         addParametricType(FUNCTION);
         addParametricType(QDIGEST);
         addParametricType(TDIGEST);
+
+        addType(
+                new IntegerEnumType("Mood", ImmutableMap.of(
+                        "BLUE", 0L,
+                        "RED", 1L)));
+        addType(new StringEnumType("Country", ImmutableMap.of(
+                "US", "us",
+                "FRANCE", "FRANCE"
+                ))
+        );
 
         for (Type type : types) {
             addType(type);

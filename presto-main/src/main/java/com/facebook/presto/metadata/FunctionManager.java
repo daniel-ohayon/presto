@@ -19,6 +19,7 @@ import com.facebook.presto.common.CatalogSchemaName;
 import com.facebook.presto.common.block.BlockEncodingSerde;
 import com.facebook.presto.common.function.OperatorType;
 import com.facebook.presto.common.function.QualifiedFunctionName;
+import com.facebook.presto.common.type.EnumType;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
 import com.facebook.presto.common.type.TypeSignature;
@@ -44,6 +45,7 @@ import com.facebook.presto.sql.gen.CacheStatsMBean;
 import com.facebook.presto.sql.tree.QualifiedName;
 import com.facebook.presto.transaction.TransactionId;
 import com.facebook.presto.transaction.TransactionManager;
+import com.facebook.presto.type.EnumOperators;
 import com.facebook.presto.type.TypeRegistry;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
@@ -443,6 +445,12 @@ public class FunctionManager
                 .collect(Collectors.toList());
 
         Optional<Signature> match = matchFunctionExact(exactCandidates, parameterTypes);
+
+        if ("get_enum_value".equals(functionName.getFunctionName())) {
+            match = Optional.of(EnumOperators.makeEnumKeyLookupFunction(
+                    (EnumType) typeManager.getType(parameterTypes.get(1).getTypeSignature())).getSignature());
+        }
+
         if (match.isPresent()) {
             return functionNamespaceManager.getFunctionHandle(transactionHandle, match.get());
         }

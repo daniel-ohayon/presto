@@ -23,7 +23,7 @@ public class StringEnumType
 
     public StringEnumType(String name, Map<String, String> entries)
     {
-        super(VarcharType.UNBOUNDED_LENGTH, TypeSignature.parseTypeSignature(name));
+        super(VarcharType.MAX_LENGTH, TypeSignature.parseTypeSignature(name));
         this.entries = entries;
     }
 
@@ -31,5 +31,17 @@ public class StringEnumType
     public Map<String, String> getEntries()
     {
         return entries;
+    }
+
+    @Override
+    public boolean isComparable()
+    {
+        return false;
+    }
+
+    @Override
+    public boolean isOrderable()
+    {
+        return false;
     }
 }

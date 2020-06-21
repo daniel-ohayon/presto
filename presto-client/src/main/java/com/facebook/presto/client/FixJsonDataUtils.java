@@ -174,6 +174,7 @@ final class FixJsonDataUtils
             case DECIMAL:
             case CHAR:
             case GEOMETRY:
+            case "Country":
                 return String.class.cast(value);
             case BING_TILE:
                 // Bing tiles are serialized as strings when used as map keys,

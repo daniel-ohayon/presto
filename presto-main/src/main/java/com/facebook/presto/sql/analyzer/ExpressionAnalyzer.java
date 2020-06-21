@@ -19,6 +19,7 @@ import com.facebook.presto.common.function.SqlFunctionProperties;
 import com.facebook.presto.common.type.CharType;
 import com.facebook.presto.common.type.DecimalParseResult;
 import com.facebook.presto.common.type.Decimals;
+import com.facebook.presto.common.type.EnumType;
 import com.facebook.presto.common.type.FunctionType;
 import com.facebook.presto.common.type.RowType;
 import com.facebook.presto.common.type.Type;
@@ -757,7 +758,7 @@ public class ExpressionAnalyzer
                 throw new SemanticException(TYPE_MISMATCH, node, "Unknown type: " + node.getType());
             }
 
-            if (!JSON.equals(type)) {
+            if (!JSON.equals(type) && !(type instanceof EnumType)) {
                 try {
                     functionManager.lookupCast(CAST, VARCHAR.getTypeSignature(), type.getTypeSignature());
                 }

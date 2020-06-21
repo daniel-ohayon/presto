@@ -13,6 +13,7 @@ import com.facebook.presto.common.type.VarcharType;
 import com.facebook.presto.metadata.SignatureBuilder;
 import com.facebook.presto.metadata.SqlScalarFunction;
 import com.facebook.presto.spi.PrestoException;
+import com.facebook.presto.spi.function.FunctionKind;
 import com.facebook.presto.spi.function.Signature;
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slice;
@@ -37,26 +38,56 @@ public final class EnumOperators
     private static final String INTEGER_ENUM_KEY_LOOKUP_METHOD = "integerEnumKeyLookup";
     private static final String INTEGER_ENUM_VALUE_LOOKUP_METHOD = "integerEnumValueLookup";
 
+    // TODO add cast functions from enum to base types too?
+
+    public static SqlScalarFunction makeEnumKeyLookupFunction(EnumType enumType)
+    {
+        if (enumType instanceof IntegerEnumType) {
+            return makeFunction(enumType, INTEGER_ENUM_KEY_LOOKUP_METHOD);
+        }
+        else if (enumType instanceof StringEnumType) {
+            return makeFunction(enumType, STRING_ENUM_KEY_LOOKUP_METHOD);
+        }
+        else {
+            throw new PrestoException(GENERIC_INTERNAL_ERROR, String.format("Unexpected enum type: %s", enumType.getClass().getSimpleName()));
+        }
+    }
+
     public static Collection<SqlScalarFunction> makeEnumCastFunctions(EnumType enumType)
     {
         if (enumType instanceof IntegerEnumType) {
-            Collection<SqlScalarFunction> intCastFunctions = Stream.of(
+            return Stream.of(
                     TinyintType.TINYINT, SmallintType.SMALLINT, IntegerType.INTEGER, BigintType.BIGINT)
                     .map(intType -> makeCastFunction(intType, enumType, INTEGER_ENUM_VALUE_LOOKUP_METHOD))
                     .collect(Collectors.toCollection(ArrayList::new));
-
-            intCastFunctions.add(makeCastFunction(VarcharType.VARCHAR, enumType, INTEGER_ENUM_KEY_LOOKUP_METHOD));
-            return intCastFunctions;
         }
         else if (enumType instanceof StringEnumType) {
             return ImmutableList.of(
-                    makeCastFunction(VarcharType.VARCHAR, enumType, STRING_ENUM_KEY_LOOKUP_METHOD),
                     makeCastFunction(VarcharType.VARCHAR, enumType, STRING_ENUM_VALUE_LOOKUP_METHOD)
             );
         }
         else {
             throw new PrestoException(GENERIC_INTERNAL_ERROR, String.format("Unexpected enum type: %s", enumType.getClass().getSimpleName()));
         }
+    }
+
+    private static SqlScalarFunction makeFunction(EnumType enumType, String castMethodName)
+    {
+        Signature signature = SignatureBuilder.builder()
+                .kind(SCALAR)
+                .name("get_enum_value")
+                .argumentTypes(VarcharType.VARCHAR.getTypeSignature())
+                .returnType(enumType.getTypeSignature())
+                .build();
+        return SqlScalarFunction.builder(EnumOperators.class)
+                .signature(signature)
+                .deterministic(true)
+                .calledOnNullInput(false)
+                .choice(choice -> choice.implementation(
+                        methodsGroup -> methodsGroup.methods(castMethodName)
+                                .withExtraParameters(
+                                        context -> ImmutableList.of(enumType))))
+                .build();
     }
 
     private static SqlScalarFunction makeCastFunction(Type fromType, EnumType enumType, String castMethodName)
@@ -89,7 +120,7 @@ public final class EnumOperators
                             value.toStringUtf8(),
                             enumType.getTypeSignature().getBase()));
         }
-        return Slices.utf8Slice(enumValue);
+        return value;
     }
 
     @UsedByGeneratedCode
@@ -99,10 +130,10 @@ public final class EnumOperators
             throw new PrestoException(INVALID_CAST_ARGUMENT,
                     String.format(
                             "No value '%s' in enum '%s'",
-                            value.toString(),
+                            value.toStringUtf8(),
                             enumType.getTypeSignature().getBase()));
         }
-        return value;
+        return Slices.utf8Slice("hello");
     }
 
     @UsedByGeneratedCode
