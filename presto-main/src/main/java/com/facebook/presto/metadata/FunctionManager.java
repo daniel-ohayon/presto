@@ -434,7 +434,6 @@ public class FunctionManager
                 .collect(Collectors.toList());
 
         Optional<Signature> match = matchFunctionExact(exactCandidates, parameterTypes);
-
         if (match.isPresent()) {
             return functionNamespaceManager.getFunctionHandle(transactionHandle, match.get());
         }

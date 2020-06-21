@@ -13,18 +13,13 @@
  */
 package com.facebook.presto.client;
 
-import com.facebook.presto.common.type.EnumType;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeMetadata;
 import com.facebook.presto.common.type.TypeSignature;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.ImmutableMap;
-import com.sun.security.ntlm.Client;
 
 import javax.annotation.concurrent.Immutable;
-
-import java.util.Map;
 
 import static java.util.Objects.requireNonNull;
 

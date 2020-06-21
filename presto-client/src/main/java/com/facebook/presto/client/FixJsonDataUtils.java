@@ -94,6 +94,7 @@ final class FixJsonDataUtils
         if (value == null) {
             return null;
         }
+
         if (signature.getBase().equals(ARRAY)) {
             List<Object> fixedValue = new ArrayList<>();
             for (Object object : List.class.cast(value)) {
@@ -126,7 +127,6 @@ final class FixJsonDataUtils
             }
             return fixedValue;
         }
-
         switch (signature.getBase()) {
             case BIGINT:
                 if (value instanceof String) {
