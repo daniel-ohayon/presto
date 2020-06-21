@@ -64,6 +64,6 @@ public class IntegerEnumType
     {
         Map<String, String> stringifiedEntries = this.getEntries().entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toString()));
-        return new TypeMetadata("IntegerEnum", stringifiedEntries);
+        return new TypeMetadata(BigintType.BIGINT.getTypeSignature(), stringifiedEntries);
     }
 }

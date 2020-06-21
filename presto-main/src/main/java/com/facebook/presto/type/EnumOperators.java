@@ -1,3 +1,16 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.facebook.presto.type;
 
 import com.facebook.presto.annotation.UsedByGeneratedCode;
@@ -32,8 +45,7 @@ public final class EnumOperators
 {
     private EnumOperators() {}
 
-    private static final String STRING_ENUM_KEY_LOOKUP_METHOD = "stringEnumKeyLookup";
-    private static final String STRING_ENUM_VALUE_LOOKUP_METHOD = "stringEnumValueLookup";
+    private static final String STRING_ENUM_KEYVAL_LOOKUP_METHOD = "stringEnumKeyOrValueLookup";
     private static final String INTEGER_ENUM_KEY_LOOKUP_METHOD = "integerEnumKeyLookup";
     private static final String INTEGER_ENUM_VALUE_LOOKUP_METHOD = "integerEnumValueLookup";
 
@@ -51,9 +63,8 @@ public final class EnumOperators
         }
         else if (enumType instanceof StringEnumType) {
             return ImmutableList.of(
-                    // TODO find a way to resolve the ambiguity between these two
-                    makeCastFunction(VarcharType.VARCHAR.getTypeSignature(), enumType, STRING_ENUM_KEY_LOOKUP_METHOD),
-                    // makeCastFunction(VarcharType.VARCHAR.getTypeSignature(), enumType, STRING_ENUM_VALUE_LOOKUP_METHOD)
+                    // TODO find a way to disambiguate key CAST from value CAST for StringEnums?
+                    makeCastFunction(VarcharType.VARCHAR.getTypeSignature(), enumType, STRING_ENUM_KEYVAL_LOOKUP_METHOD)
             );
         }
         else {
@@ -80,31 +91,20 @@ public final class EnumOperators
     }
 
     @UsedByGeneratedCode
-    public static Slice stringEnumKeyLookup(Slice value, StringEnumType enumType)
+    public static Slice stringEnumKeyOrValueLookup(Slice value, StringEnumType enumType)
     {
         final String enumValue = enumType.getEntries().get(value.toStringUtf8());
         if (enumValue == null) {
-            throw new PrestoException(
-                    INVALID_CAST_ARGUMENT,
-                    String.format(
-                            "No key '%s' in enum '%s'",
-                            value.toStringUtf8(),
-                            enumType.getTypeSignature().getBase()));
+            if (!enumType.getEntries().values().contains(value.toStringUtf8())) {
+                throw new PrestoException(INVALID_CAST_ARGUMENT,
+                        String.format(
+                                "No key or value '%s' in enum '%s'",
+                                value.toStringUtf8(),
+                                enumType.getTypeSignature().getBase()));
+            }
+            return Slices.copyOf(value);
         }
         return Slices.utf8Slice(enumValue);
-    }
-
-    @UsedByGeneratedCode
-    public static Slice stringEnumValueLookup(Slice value, StringEnumType enumType)
-    {
-        if (!enumType.getEntries().values().contains(value.toStringUtf8())) {
-            throw new PrestoException(INVALID_CAST_ARGUMENT,
-                    String.format(
-                            "No value '%s' in enum '%s'",
-                            value.toStringUtf8(),
-                            enumType.getTypeSignature().getBase()));
-        }
-        return Slices.copyOf(value);
     }
 
     @UsedByGeneratedCode

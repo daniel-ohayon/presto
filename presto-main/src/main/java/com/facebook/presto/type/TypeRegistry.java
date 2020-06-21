@@ -172,7 +172,7 @@ public final class TypeRegistry
                         "BLUE", 0L,
                         "RED", 1L)));
         addType(new StringEnumType("Country", ImmutableMap.of(
-                "US", "us",
+                "US", "hello",
                 "FRANCE", "FRANCE"
                 ))
         );

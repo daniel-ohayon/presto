@@ -190,5 +190,5 @@ public interface Type
     /**
      * Return additional type information relevant to clients
      */
-    default TypeMetadata getTypeMetadata() { return null; }
+    default TypeMetadata getTypeMetadata() { return new TypeMetadata(); }
 }

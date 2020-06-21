@@ -47,6 +47,6 @@ public class StringEnumType
 
     @Override
     public TypeMetadata getTypeMetadata() {
-        return new TypeMetadata("StringEnum", this.getEntries());
+        return new TypeMetadata(VarcharType.VARCHAR.getTypeSignature(), this.getEntries());
     }
 }

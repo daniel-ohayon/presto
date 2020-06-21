@@ -62,7 +62,7 @@ public class Column
         this.name = requireNonNull(name, "name is null");
         this.type = requireNonNull(type, "type is null");
         this.typeSignature = typeSignature;
-        this.typeMetadata = typeMetadata;
+        this.typeMetadata = requireNonNull(typeMetadata, "typeMetadata is null");
     }
 
     @JsonProperty

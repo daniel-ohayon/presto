@@ -15,8 +15,6 @@ package com.facebook.presto.client;
 
 import com.facebook.presto.common.type.NamedTypeSignature;
 import com.facebook.presto.common.type.ParameterKind;
-import com.facebook.presto.common.type.Type;
-import com.facebook.presto.common.type.TypeMetadata;
 import com.facebook.presto.common.type.TypeSignature;
 import com.facebook.presto.common.type.TypeSignatureParameter;
 import com.google.common.collect.ImmutableList;
@@ -71,14 +69,17 @@ final class FixJsonDataUtils
         }
         requireNonNull(columns, "columns is null");
         List<TypeSignature> signatures = columns.stream()
-                .map(column -> parseTypeSignature(column.getType()))
+                .map(column -> {
+                    TypeSignature displayType = column.getTypeMetadata().getDisplayType();
+                    return displayType != null ? displayType : parseTypeSignature(column.getType());
+                })
                 .collect(toList());
         ImmutableList.Builder<List<Object>> rows = ImmutableList.builder();
         for (List<Object> row : data) {
             checkArgument(row.size() == columns.size(), "row/column size mismatch");
             List<Object> newRow = new ArrayList<>();
             for (int i = 0; i < row.size(); i++) {
-                newRow.add(fixValue(signatures.get(i), row.get(i), columns.get(i).getTypeMetadata()));
+                newRow.add(fixValue(signatures.get(i), row.get(i)));
             }
             rows.add(unmodifiableList(newRow)); // allow nulls in list
         }
@@ -88,7 +89,7 @@ final class FixJsonDataUtils
     /**
      * Force values coming from Jackson to have the expected object type.
      */
-    private static Object fixValue(TypeSignature signature, Object value, TypeMetadata typeMetadata)
+    private static Object fixValue(TypeSignature signature, Object value)
     {
         if (value == null) {
             return null;
@@ -96,7 +97,7 @@ final class FixJsonDataUtils
         if (signature.getBase().equals(ARRAY)) {
             List<Object> fixedValue = new ArrayList<>();
             for (Object object : List.class.cast(value)) {
-                fixedValue.add(fixValue(signature.getTypeParametersAsTypeSignatures().get(0), object, typeMetadata));
+                fixedValue.add(fixValue(signature.getTypeParametersAsTypeSignatures().get(0), object));
             }
             return fixedValue;
         }
@@ -105,7 +106,7 @@ final class FixJsonDataUtils
             TypeSignature valueSignature = signature.getTypeParametersAsTypeSignatures().get(1);
             Map<Object, Object> fixedValue = new HashMap<>();
             for (Map.Entry<?, ?> entry : (Set<Map.Entry<?, ?>>) Map.class.cast(value).entrySet()) {
-                fixedValue.put(fixValue(keySignature, entry.getKey(), typeMetadata), fixValue(valueSignature, entry.getValue(), typeMetadata));
+                fixedValue.put(fixValue(keySignature, entry.getKey()), fixValue(valueSignature, entry.getValue()));
             }
             return fixedValue;
         }
@@ -121,13 +122,9 @@ final class FixJsonDataUtils
                         parameter);
                 NamedTypeSignature namedTypeSignature = parameter.getNamedTypeSignature();
                 String key = namedTypeSignature.getName().orElse("field" + i);
-                fixedValue.put(key, fixValue(namedTypeSignature.getTypeSignature(), listValue.get(i), typeMetadata));
+                fixedValue.put(key, fixValue(namedTypeSignature.getTypeSignature(), listValue.get(i)));
             }
             return fixedValue;
-        }
-
-        if ((typeMetadata != null) && "StringEnum".equals(typeMetadata.getTypeKind())) {
-            return String.class.cast(value);
         }
 
         switch (signature.getBase()) {
