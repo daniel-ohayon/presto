@@ -21,7 +21,6 @@ import com.facebook.presto.common.type.DateType;
 import com.facebook.presto.common.type.DecimalType;
 import com.facebook.presto.common.type.Decimals;
 import com.facebook.presto.common.type.DoubleType;
-import com.facebook.presto.common.type.EnumType;
 import com.facebook.presto.common.type.IntegerType;
 import com.facebook.presto.common.type.RealType;
 import com.facebook.presto.common.type.SmallintType;
@@ -29,7 +28,6 @@ import com.facebook.presto.common.type.SqlDate;
 import com.facebook.presto.common.type.SqlTime;
 import com.facebook.presto.common.type.SqlTimestamp;
 import com.facebook.presto.common.type.SqlVarbinary;
-import com.facebook.presto.common.type.StringEnumType;
 import com.facebook.presto.common.type.TimeType;
 import com.facebook.presto.common.type.TimestampType;
 import com.facebook.presto.common.type.TinyintType;
@@ -247,11 +245,6 @@ public final class LiteralInterpreter
 
             if (JSON.equals(type)) {
                 FunctionHandle functionHandle = metadata.getFunctionManager().lookupFunction("json_parse", fromTypes(VARCHAR));
-                return functionInvoker.invoke(functionHandle, session.getSqlFunctionProperties(), ImmutableList.of(utf8Slice(node.getValue())));
-            }
-
-            if (type instanceof EnumType) {
-                FunctionHandle functionHandle = metadata.getFunctionManager().lookupFunction("get_enum_value", fromTypes(VARCHAR, type));
                 return functionInvoker.invoke(functionHandle, session.getSqlFunctionProperties(), ImmutableList.of(utf8Slice(node.getValue())));
             }
 
