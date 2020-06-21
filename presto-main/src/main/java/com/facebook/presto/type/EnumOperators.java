@@ -53,7 +53,7 @@ public final class EnumOperators
             return ImmutableList.of(
                     // TODO find a way to resolve the ambiguity between these two
                     makeCastFunction(VarcharType.VARCHAR.getTypeSignature(), enumType, STRING_ENUM_KEY_LOOKUP_METHOD),
-                    makeCastFunction(VarcharType.VARCHAR.getTypeSignature(), enumType, STRING_ENUM_VALUE_LOOKUP_METHOD)
+                    // makeCastFunction(VarcharType.VARCHAR.getTypeSignature(), enumType, STRING_ENUM_VALUE_LOOKUP_METHOD)
             );
         }
         else {
