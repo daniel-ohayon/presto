@@ -44,4 +44,9 @@ public class StringEnumType
     {
         return false;
     }
+
+    @Override
+    public TypeMetadata getTypeMetadata() {
+        return new TypeMetadata("StringEnum", this.getEntries());
+    }
 }

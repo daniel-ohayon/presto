@@ -17,6 +17,7 @@ import com.facebook.presto.common.block.Block;
 import com.facebook.presto.common.function.SqlFunctionProperties;
 
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class IntegerEnumType
         extends AbstractLongType
@@ -56,5 +57,13 @@ public class IntegerEnumType
     public boolean isOrderable()
     {
         return false;
+    }
+
+    @Override
+    public TypeMetadata getTypeMetadata()
+    {
+        Map<String, String> stringifiedEntries = this.getEntries().entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toString()));
+        return new TypeMetadata("IntegerEnum", stringifiedEntries);
     }
 }

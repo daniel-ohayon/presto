@@ -15,6 +15,8 @@ package com.facebook.presto.client;
 
 import com.facebook.presto.common.type.NamedTypeSignature;
 import com.facebook.presto.common.type.ParameterKind;
+import com.facebook.presto.common.type.Type;
+import com.facebook.presto.common.type.TypeMetadata;
 import com.facebook.presto.common.type.TypeSignature;
 import com.facebook.presto.common.type.TypeSignatureParameter;
 import com.google.common.collect.ImmutableList;
@@ -76,7 +78,7 @@ final class FixJsonDataUtils
             checkArgument(row.size() == columns.size(), "row/column size mismatch");
             List<Object> newRow = new ArrayList<>();
             for (int i = 0; i < row.size(); i++) {
-                newRow.add(fixValue(signatures.get(i), row.get(i)));
+                newRow.add(fixValue(signatures.get(i), row.get(i), columns.get(i).getTypeMetadata()));
             }
             rows.add(unmodifiableList(newRow)); // allow nulls in list
         }
@@ -86,16 +88,15 @@ final class FixJsonDataUtils
     /**
      * Force values coming from Jackson to have the expected object type.
      */
-    private static Object fixValue(TypeSignature signature, Object value)
+    private static Object fixValue(TypeSignature signature, Object value, TypeMetadata typeMetadata)
     {
         if (value == null) {
             return null;
         }
-
         if (signature.getBase().equals(ARRAY)) {
             List<Object> fixedValue = new ArrayList<>();
             for (Object object : List.class.cast(value)) {
-                fixedValue.add(fixValue(signature.getTypeParametersAsTypeSignatures().get(0), object));
+                fixedValue.add(fixValue(signature.getTypeParametersAsTypeSignatures().get(0), object, typeMetadata));
             }
             return fixedValue;
         }
@@ -104,7 +105,7 @@ final class FixJsonDataUtils
             TypeSignature valueSignature = signature.getTypeParametersAsTypeSignatures().get(1);
             Map<Object, Object> fixedValue = new HashMap<>();
             for (Map.Entry<?, ?> entry : (Set<Map.Entry<?, ?>>) Map.class.cast(value).entrySet()) {
-                fixedValue.put(fixValue(keySignature, entry.getKey()), fixValue(valueSignature, entry.getValue()));
+                fixedValue.put(fixValue(keySignature, entry.getKey(), typeMetadata), fixValue(valueSignature, entry.getValue(), typeMetadata));
             }
             return fixedValue;
         }
@@ -120,10 +121,15 @@ final class FixJsonDataUtils
                         parameter);
                 NamedTypeSignature namedTypeSignature = parameter.getNamedTypeSignature();
                 String key = namedTypeSignature.getName().orElse("field" + i);
-                fixedValue.put(key, fixValue(namedTypeSignature.getTypeSignature(), listValue.get(i)));
+                fixedValue.put(key, fixValue(namedTypeSignature.getTypeSignature(), listValue.get(i), typeMetadata));
             }
             return fixedValue;
         }
+
+        if ((typeMetadata != null) && "StringEnum".equals(typeMetadata.getTypeKind())) {
+            return String.class.cast(value);
+        }
+
         switch (signature.getBase()) {
             case BIGINT:
                 if (value instanceof String) {
@@ -174,7 +180,6 @@ final class FixJsonDataUtils
             case DECIMAL:
             case CHAR:
             case GEOMETRY:
-            case "Country":
                 return String.class.cast(value);
             case BING_TILE:
                 // Bing tiles are serialized as strings when used as map keys,
