@@ -96,7 +96,8 @@ public final class EnumOperators
         final String enumValue = enumType.getEntries().get(value.toStringUtf8());
         if (enumValue == null) {
             if (!enumType.getEntries().values().contains(value.toStringUtf8())) {
-                throw new PrestoException(INVALID_CAST_ARGUMENT,
+                throw new PrestoException(
+                        INVALID_CAST_ARGUMENT,
                         String.format(
                                 "No key or value '%s' in enum '%s'",
                                 value.toStringUtf8(),

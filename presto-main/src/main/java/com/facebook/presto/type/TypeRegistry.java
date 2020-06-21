@@ -167,16 +167,6 @@ public final class TypeRegistry
         addParametricType(QDIGEST);
         addParametricType(TDIGEST);
 
-        addType(
-                new IntegerEnumType("Mood", ImmutableMap.of(
-                        "BLUE", 0L,
-                        "RED", 1L)));
-        addType(new StringEnumType("Country", ImmutableMap.of(
-                "US", "hello",
-                "FRANCE", "FRANCE"
-                ))
-        );
-
         for (Type type : types) {
             addType(type);
         }
